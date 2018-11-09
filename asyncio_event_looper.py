@@ -19,6 +19,7 @@ class AsyncioEventLooper:
         self._add_default_signal_handler()
 
     def _default_signal_handler(self, signame):
+        print('\n{} received. Exiting...'.format(signame))
         self._q.put_nowait((_SYS_EXIT, signame))
 
     def _add_default_signal_handler(self):
