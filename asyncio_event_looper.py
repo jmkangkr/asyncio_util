@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import functools
 import signal
+import socket
 
 
 _SYS_EXIT = "_SYS_EXIT"
@@ -80,6 +81,106 @@ class AsyncioEventLooper:
         initial_sleep_time = (date_time - datetime.datetime.now()).total_seconds()
         return self._loop.create_task(self._task_generate_event(event, param, initial_sleep_time, time_delta))
 
+    async def _stream_server_task_func(self,
+                                       event_conn,
+                                       event_data,
+                                       event_disconn,
+                                       event_eof,
+                                       event_error,
+                                       listening_port):
+        class _StreamProtocol(asyncio.Protocol):
+            def __init__(self,
+                         q_,
+                         event_conn_,
+                         event_data_,
+                         event_disconn_,
+                         event_eof_,
+                         event_error_):
+                self._q = q_
+                self._event_conn = event_conn_
+                self._event_data = event_data_
+                self._event_disconn = event_disconn_
+                self._event_eof = event_eof_
+                self._event_error = event_error_
+
+            def connection_made(self, transport):
+                self._q.put_nowait((self._event_conn, transport))
+
+            def data_received(self, data):
+                self._q.put_nowait((self._event_data, data.decode('utf-8')))
+
+            def connection_lost(self, exc):
+                self._q.put_nowait((self._event_disconn, None))
+
+            def eof_received(self):
+                self._q.put_nowait((self._event_eof, None))
+
+            def error_received(self, exc):
+                self._q.put_nowait((self._event_error, exc))
+
+        server = await self._loop.create_server(lambda: _StreamProtocol(self._q,
+                                                                        event_conn,
+                                                                        event_data,
+                                                                        event_disconn,
+                                                                        event_eof,
+                                                                        event_error),
+                                                host=socket.gethostname(),
+                                                port=listening_port)
+
+        async with server:
+            await server.serve_forever()
+
+    async def register_stream_server(self, event_conn, event_data, listening_port):
+        return self._loop.create_task(self._stream_server_task_func(event_conn, event_data, listening_port))
+
+    async def _datagram_server_task_func(self,
+                                         event_conn,
+                                         event_data,
+                                         event_disconn,
+                                         event_eof,
+                                         event_error,
+                                         listening_port):
+        class _DatagramProtocol(asyncio.DatagramProtocol):
+            def __init__(self,
+                         q_,
+                         event_conn_,
+                         event_data_,
+                         event_disconn_,
+                         event_eof_,
+                         event_error_):
+                self._q = q_
+                self._event_conn = event_conn_
+                self._event_data = event_data_
+                self._event_disconn = event_disconn_
+                self._event_eof = event_eof_
+                self._event_error = event_error_
+
+            def connection_made(self, transport):
+                self._q.put_nowait((self._event_conn, transport))
+
+            def datagram_received(self, data, address):
+                self._q.put_nowait((self._event_data, (address, data.decode('utf-8'))))
+
+            def connection_lost(self, exc):
+                self._q.put_nowait((self._event_disconn, None))
+
+            def eof_received(self):
+                self._q.put_nowait((self._event_eof, None))
+
+            def error_received(self, exc):
+                self._q.put_nowait((self._event_error, exc))
+
+        transport, protocol = await self._loop.create_datagram_endpoint(lambda: _DatagramProtocol(self._q,
+                                                                                                  event_conn,
+                                                                                                  event_data,
+                                                                                                  event_disconn,
+                                                                                                  event_eof,
+                                                                                                  event_error),
+                                                                        local_addr=(socket.gethostbyname(socket.gethostname()), listening_port))
+
+    async def register_datagram_server(self, event_conn, event_data, listening_port):
+        return self._loop.create_task(self._datagram_server_task_func(event_conn, event_data, listening_port))
+
     async def register_async_func(self, async_func):
         return self._loop.create_task(async_func)
 
@@ -106,7 +207,7 @@ class AsyncioEventLooper:
         self._loop.close()
 
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 # Test
 
 class ClientContext:
@@ -114,18 +215,18 @@ class ClientContext:
         self.count = 0
 
 
-async def init_handler(looper):
+async def _init_handler(looper):
     await looper.generate_event_after_periodically('event_update3', None, 7, 3)
     await looper.generate_event_after_periodically('event_update5', None, 0, 5)
     looper.set_context(ClientContext())
     return True
 
 
-async def exit_handler(looper):
+async def _exit_handler(looper):
     print('Exiting...')
 
 
-async def event_handler(looper, event, param):
+async def _event_handler(looper, event, param):
     context = looper.get_context()
     print("{:3} {} {}".format(context.count, datetime.datetime.now().strftime('%H:%M:%S.%f')[:-4], event))
     context.count += 1
@@ -138,4 +239,4 @@ async def event_handler(looper, event, param):
 if __name__ == "__main__":
     _looper = AsyncioEventLooper()
 
-    _looper.run(init_handler, event_handler, exit_handler)
+    _looper.run(_init_handler, _event_handler, _exit_handler)
