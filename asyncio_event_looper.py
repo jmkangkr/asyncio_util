@@ -130,8 +130,8 @@ class AsyncioEventLooper:
         async with server:
             await server.serve_forever()
 
-    async def register_stream_server(self, event_conn, event_data, listening_port):
-        return self._loop.create_task(self._stream_server_task_func(event_conn, event_data, listening_port))
+    async def register_stream_server(self, event_conn, event_data, event_disconn, event_eof, event_error, listening_port):
+        return self._loop.create_task(self._stream_server_task_func(event_conn, event_data, event_disconn, event_eof, event_error, listening_port))
 
     async def _datagram_server_task_func(self,
                                          event_conn,
@@ -178,8 +178,8 @@ class AsyncioEventLooper:
                                                                                                   event_error),
                                                                         local_addr=(socket.gethostbyname(socket.gethostname()), listening_port))
 
-    async def register_datagram_server(self, event_conn, event_data, listening_port):
-        return self._loop.create_task(self._datagram_server_task_func(event_conn, event_data, listening_port))
+    async def register_datagram_server(self, event_conn, event_data, event_disconn, event_eof, event_error, listening_port):
+        return self._loop.create_task(self._datagram_server_task_func(event_conn, event_data, event_disconn, event_eof, event_error, listening_port))
 
     async def register_async_func(self, async_func):
         return self._loop.create_task(async_func)
