@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 
 
 class AsyncioTimerCallback:
@@ -16,7 +17,10 @@ class AsyncioTimerCallback:
     @staticmethod
     async def _job(timeout, callback, args):
         await asyncio.sleep(timeout)
-        callback(*args)
+        if inspect.iscoroutinefunction(callback):
+            await callback(*args)
+        else:
+            callback(*args)
 
     def cancel(self):
         if self._task:
