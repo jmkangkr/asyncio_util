@@ -184,6 +184,9 @@ class AsyncioEventLooper:
     async def register_async_func(self, async_func):
         return self._loop.create_task(async_func)
 
+    def register_async_func_nowait(self, async_func):
+        return self._loop.create_task(async_func)
+
     def stop(self):
         self._q.put_nowait((_SYS_EXIT, None))
 
