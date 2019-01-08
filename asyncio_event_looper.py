@@ -10,7 +10,9 @@ _SYS_EXIT = "_SYS_EXIT"
 
 class AsyncioEventLooper:
     def __init__(self):
-        self._loop = asyncio.get_event_loop()
+        # self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
         self._q = asyncio.Queue()
         self._init_handler = None
         self._event_handler = None
